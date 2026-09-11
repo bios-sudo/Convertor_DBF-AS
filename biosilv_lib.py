@@ -301,10 +301,27 @@ def _split_pair_block(block, n_pairs=5):
     return out
 
 
-def a_s_to_dbf(a_path, s_path, template_dbf_path, out_dbf_path):
-    """Construieste un DBF BIOSILV nou, folosind structura de campuri din template_dbf_path
-    (necesar ca soft-ul BIOSILV sa recunoasca fisierul) si datele din A.xlsx / S.xlsx."""
-    fields, _, header_extra = read_dbf(template_dbf_path)
+# ---------------------------------------------------------------------------
+# Sablon standard BIOSILV (structura de campuri + blocul backlink .DBC) -
+# extras dintr-un DBF real, validat. E intotdeauna acelasi pentru o
+# instalatie BIOSILV data, deci nu mai trebuie incarcat manual (dar poate fi
+# suprascris optional cu un template_dbf_path propriu, la nevoie).
+# ---------------------------------------------------------------------------
+import base64 as _base64
+
+STANDARD_TEMPLATE_FIELDS = [tuple(f) for f in [["UA", "C", 5, 0], ["SUP", "C", 1, 0], ["F", "N", 3, 0], ["SPR", "N", 9, 4], ["FLS", "N", 2, 0], ["GF", "N", 1, 0], ["FCT1", "C", 2, 0], ["FCT2", "C", 2, 0], ["FCT3", "C", 2, 0], ["RLF", "C", 2, 0], ["CNF", "C", 1, 0], ["EXP", "C", 2, 0], ["INC", "N", 2, 0], ["ALT1", "N", 6, 1], ["ALT2", "N", 4, 0], ["SOL", "N", 4, 0], ["ERZ", "C", 2, 0], ["FLR", "N", 2, 0], ["TS", "N", 4, 0], ["INV", "N", 1, 0], ["TP", "N", 4, 0], ["CRT", "C", 1, 0], ["POL1", "C", 1, 0], ["POL2", "C", 1, 0], ["POL3", "C", 1, 0], ["LIT", "N", 1, 0], ["DRM", "C", 5, 0], ["DST", "N", 2, 0], ["STR", "N", 1, 0], ["CNS", "N", 3, 1], ["CLP", "N", 1, 0], ["TA", "N", 3, 0], ["REG", "N", 1, 0], ["TE", "N", 3, 0], ["EX", "N", 1, 0], ["URG", "N", 2, 0], ["PRM", "N", 2, 0], ["NIN", "N", 1, 0], ["NID", "N", 1, 0], ["LX1", "C", 2, 0], ["LXA1", "C", 1, 0], ["LX2", "C", 2, 0], ["LXA2", "C", 1, 0], ["LP1", "C", 2, 0], ["LP2", "C", 2, 0], ["LP3", "C", 2, 0], ["DC1", "C", 2, 0], ["DC2", "C", 2, 0], ["DC3", "C", 2, 0], ["DC4", "C", 2, 0], ["SPT1", "C", 3, 0], ["P1", "N", 2, 0], ["SPT2", "C", 3, 0], ["P2", "N", 1, 0], ["SPT3", "C", 3, 0], ["P3", "N", 1, 0], ["SPT4", "C", 3, 0], ["P4", "N", 1, 0], ["SPT5", "C", 3, 0], ["P5", "N", 1, 0], ["SPT6", "C", 3, 0], ["P6", "N", 1, 0], ["SBA1", "C", 1, 0], ["SBA2", "C", 1, 0], ["SBA3", "C", 1, 0], ["SBA4", "C", 1, 0], ["SBA5", "C", 1, 0], ["SO", "N", 1, 0], ["MR", "N", 1, 0], ["DS", "N", 1, 0], ["VS", "N", 2, 0], ["SU1", "C", 3, 0], ["PS1", "N", 2, 0], ["SU2", "C", 3, 0], ["PS2", "N", 1, 0], ["SU3", "C", 3, 0], ["PS3", "N", 1, 0], ["SU4", "C", 3, 0], ["PS4", "N", 1, 0], ["SU5", "C", 3, 0], ["PS5", "N", 1, 0], ["SU6", "C", 3, 0], ["PS6", "N", 1, 0], ["SOC", "N", 1, 0], ["RS", "N", 1, 0], ["ELM1", "C", 3, 0], ["MRG1", "N", 1, 0], ["VRT1", "N", 3, 0], ["PRP1", "N", 2, 0], ["DM1", "N", 2, 0], ["HM1", "N", 2, 0], ["M1", "N", 1, 0], ["CP1", "N", 1, 0], ["AMS1", "N", 1, 0], ["ELG1", "N", 1, 0], ["VIT1", "N", 1, 0], ["TEL1", "N", 1, 0], ["CAL1", "N", 2, 0], ["VOL1", "N", 7, 0], ["CRS1", "N", 6, 2], ["PEX11", "N", 2, 0], ["PEX21", "N", 2, 0], ["PEX31", "N", 2, 0], ["PROV1", "C", 6, 0], ["CREST1", "N", 6, 2], ["ELM2", "C", 3, 0], ["MRG2", "N", 1, 0], ["VRT2", "N", 3, 0], ["PRP2", "N", 2, 0], ["DM2", "N", 2, 0], ["HM2", "N", 2, 0], ["M2", "N", 1, 0], ["CP2", "N", 1, 0], ["AMS2", "N", 1, 0], ["ELG2", "N", 1, 0], ["VIT2", "N", 1, 0], ["TEL2", "N", 1, 0], ["CAL2", "N", 2, 0], ["VOL2", "N", 7, 0], ["CRS2", "N", 6, 2], ["PEX12", "N", 2, 0], ["PEX22", "N", 2, 0], ["PEX32", "N", 2, 0], ["PROV2", "C", 6, 0], ["CREST2", "N", 6, 2], ["ELM3", "C", 3, 0], ["MRG3", "N", 1, 0], ["VRT3", "N", 3, 0], ["PRP3", "N", 2, 0], ["DM3", "N", 2, 0], ["HM3", "N", 2, 0], ["M3", "N", 1, 0], ["CP3", "N", 1, 0], ["AMS3", "N", 1, 0], ["ELG3", "N", 1, 0], ["VIT3", "N", 1, 0], ["TEL3", "N", 1, 0], ["CAL3", "N", 2, 0], ["VOL3", "N", 7, 0], ["CRS3", "N", 6, 2], ["PEX13", "N", 2, 0], ["PEX23", "N", 2, 0], ["PEX33", "N", 2, 0], ["PROV3", "C", 6, 0], ["CREST3", "N", 6, 2], ["ELM4", "C", 3, 0], ["MRG4", "N", 1, 0], ["VRT4", "N", 3, 0], ["PRP4", "N", 2, 0], ["DM4", "N", 2, 0], ["HM4", "N", 2, 0], ["M4", "N", 1, 0], ["CP4", "N", 1, 0], ["AMS4", "N", 1, 0], ["ELG4", "N", 1, 0], ["VIT4", "N", 1, 0], ["TEL4", "N", 1, 0], ["CAL4", "N", 2, 0], ["VOL4", "N", 7, 0], ["CRS4", "N", 6, 2], ["PEX14", "N", 2, 0], ["PEX24", "N", 2, 0], ["PEX34", "N", 2, 0], ["PROV4", "C", 6, 0], ["CREST4", "N", 6, 2], ["ELM5", "C", 3, 0], ["MRG5", "N", 1, 0], ["VRT5", "N", 3, 0], ["PRP5", "N", 2, 0], ["DM5", "N", 2, 0], ["HM5", "N", 2, 0], ["M5", "N", 1, 0], ["CP5", "N", 1, 0], ["AMS5", "N", 1, 0], ["ELG5", "N", 1, 0], ["VIT5", "N", 1, 0], ["TEL5", "N", 1, 0], ["CAL5", "N", 2, 0], ["VOL5", "N", 7, 0], ["CRS5", "N", 6, 2], ["PEX15", "N", 2, 0], ["PEX25", "N", 2, 0], ["PEX35", "N", 2, 0], ["PROV5", "C", 6, 0], ["CREST5", "N", 6, 2], ["ELM6", "C", 3, 0], ["MRG6", "N", 1, 0], ["VRT6", "N", 3, 0], ["PRP6", "N", 2, 0], ["DM6", "N", 2, 0], ["HM6", "N", 2, 0], ["M6", "N", 1, 0], ["CP6", "N", 1, 0], ["AMS6", "N", 1, 0], ["ELG6", "N", 1, 0], ["VIT6", "N", 1, 0], ["TEL6", "N", 1, 0], ["CAL6", "N", 2, 0], ["VOL6", "N", 7, 0], ["CRS6", "N", 6, 2], ["PEX16", "N", 2, 0], ["PEX26", "N", 2, 0], ["PEX36", "N", 2, 0], ["PROV6", "C", 6, 0], ["CREST6", "N", 6, 2], ["ELM7", "C", 3, 0], ["MRG7", "N", 1, 0], ["VRT7", "N", 3, 0], ["PRP7", "N", 2, 0], ["DM7", "N", 2, 0], ["HM7", "N", 2, 0], ["M7", "N", 1, 0], ["CP7", "N", 1, 0], ["AMS7", "N", 1, 0], ["ELG7", "N", 1, 0], ["VIT7", "N", 1, 0], ["TEL7", "N", 1, 0], ["CAL7", "N", 2, 0], ["VOL7", "N", 7, 0], ["CRS7", "N", 6, 2], ["PEX17", "N", 2, 0], ["PEX27", "N", 2, 0], ["PEX37", "N", 2, 0], ["PROV7", "C", 6, 0], ["CREST7", "N", 6, 2], ["ELM8", "C", 3, 0], ["MRG8", "N", 1, 0], ["VRT8", "N", 3, 0], ["PRP8", "N", 2, 0], ["DM8", "N", 2, 0], ["HM8", "N", 2, 0], ["M8", "N", 1, 0], ["CP8", "N", 1, 0], ["AMS8", "N", 1, 0], ["ELG8", "N", 1, 0], ["VIT8", "N", 1, 0], ["TEL8", "N", 1, 0], ["CAL8", "N", 2, 0], ["VOL8", "N", 7, 0], ["CRS8", "N", 6, 2], ["PEX18", "N", 2, 0], ["PEX28", "N", 2, 0], ["PEX38", "N", 2, 0], ["PROV8", "C", 6, 0], ["CREST8", "N", 6, 2], ["DEC1", "N", 1, 0], ["DEC2", "N", 1, 0], ["DEC3", "N", 1, 0]]]
+STANDARD_TEMPLATE_EXTRA = _base64.b64decode("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+
+
+def a_s_to_dbf(a_path, s_path, template_dbf_path=None, out_dbf_path=None):
+    """Construieste un DBF BIOSILV nou, folosind structura de campuri standard
+    (integrata, extrasa dintr-un DBF real BIOSILV) sau, optional, un
+    template_dbf_path propriu (necesar doar daca instalatia are o structura
+    diferita de cea standard) si datele din A.xlsx / S.xlsx."""
+    if template_dbf_path:
+        fields, _, header_extra = read_dbf(template_dbf_path)
+    else:
+        fields, header_extra = STANDARD_TEMPLATE_FIELDS, STANDARD_TEMPLATE_EXTRA
 
     a_rows = _read_xlsx_rows(a_path, A_HEADER)
     s_rows = _read_xlsx_rows(s_path, S_HEADER)
@@ -337,7 +354,7 @@ def a_s_to_dbf(a_path, s_path, template_dbf_path, out_dbf_path):
         rec['FCT1'] = _s(a['fct1']); rec['FCT2'] = _s(a['fct2']); rec['FCT3'] = _s(a['fct3'])
         rlf_v = a['rlf']
         rec['RLF'] = str(int(rlf_v)).zfill(2) if isinstance(rlf_v, (int, float)) else _s(rlf_v)
-        rec['CNF'] = _s(a['cnf']); rec['EXP'] = _s(a['exp'])
+        rec['CNF'] = _s(a['cnf']); rec['EXP'] = _s(a['exp']).rjust(2)  # expozitie: o singura litera -> aliniata la dreapta
         rec['INC'] = int(_n(a['inc']))
         rec['ALT1'] = _n(a['alt1']); rec['ALT2'] = _n(a['alt2'])
         rec['SOL'] = _s(a['sol']); rec['ERZ'] = _s(a['erz'])

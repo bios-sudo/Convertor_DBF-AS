@@ -103,31 +103,39 @@ with tab_dbf2as:
 with tab_as2dbf:
     st.subheader("Convertește A.xlsx + S.xlsx într-un DBF BIOSILV")
     st.write(
-        "Încarcă fișierele **A** și **S**, plus un fișier `.DBF` folosit ca **șablon** "
-        "(doar pentru structura de câmpuri — datele lui nu contează). "
-        "Ideal, folosește un DBF cât mai apropiat de instalația BIOSILV țintă."
+        "Încarcă fișierele **A** și **S**. Structura de câmpuri BIOSILV e "
+        "integrată — nu mai e nevoie de un DBF șablon."
     )
 
     a_up = st.file_uploader("Fișier A.xlsx", type=["xlsx"], key="as2dbf_a")
     s_up = st.file_uploader("Fișier S.xlsx", type=["xlsx"], key="as2dbf_s")
-    tmpl_up = st.file_uploader("DBF șablon (structură de câmpuri)", type=["dbf", "DBF"], key="as2dbf_tmpl")
     out_name = st.text_input("Nume fișier rezultat", value="rezultat.dbf", key="as2dbf_name")
 
-    ready = a_up is not None and s_up is not None and tmpl_up is not None
+    with st.expander("Ai un DBF cu o structură diferită de cea standard?"):
+        tmpl_up = st.file_uploader("DBF șablon propriu (opțional)", type=["dbf", "DBF"], key="as2dbf_tmpl")
+        st.caption(
+            "Implicit se folosește structura standard BIOSILV, integrată în aplicație. "
+            "Încarcă un DBF propriu doar dacă ai o instalație cu structură diferită."
+        )
+
+    ready = a_up is not None and s_up is not None
     if st.button("Convertește → DBF", type="primary", disabled=not ready):
         with st.spinner("Se convertește..."):
             try:
                 with tempfile.TemporaryDirectory() as tmp:
                     a_path = os.path.join(tmp, "A.xlsx")
                     s_path = os.path.join(tmp, "S.xlsx")
-                    tmpl_path = os.path.join(tmp, "template.dbf")
                     out_path = os.path.join(tmp, "out.dbf")
                     with open(a_path, "wb") as f:
                         f.write(a_up.getvalue())
                     with open(s_path, "wb") as f:
                         f.write(s_up.getvalue())
-                    with open(tmpl_path, "wb") as f:
-                        f.write(tmpl_up.getvalue())
+
+                    tmpl_path = None
+                    if tmpl_up is not None:
+                        tmpl_path = os.path.join(tmp, "template.dbf")
+                        with open(tmpl_path, "wb") as f:
+                            f.write(tmpl_up.getvalue())
 
                     n = bl.a_s_to_dbf(a_path, s_path, tmpl_path, out_path)
 
@@ -140,14 +148,6 @@ with tab_as2dbf:
                                     mime="application/octet-stream")
             except Exception as e:
                 st.error(f"A apărut o eroare: {e}")
-
-    with st.expander("De ce am nevoie de un DBF șablon?"):
-        st.write(
-            "Fișierele DBF folosite de BIOSILV sunt tabele Visual FoxPro legate de o "
-            "bază de date (.DBC) și au un bloc special de octeți în antet, specific "
-            "acelei baze de date. Pentru ca BIOSILV să recunoască fișierul nou generat, "
-            "structura de antet trebuie copiată exact dintr-un fișier DBF real, existent."
-        )
 
 # ---------------------------------------------------------------------------
 # TAB 3: Fise de teren
@@ -168,11 +168,17 @@ with tab_fise:
     if not use_default_tmpl:
         tmpl_up2 = st.file_uploader("Formular FISA_DESCR.docx (propriu)", type=["docx"], key="fise_tmpl")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         isj_val = st.text_input("Cod ISJ", value="01", key="fise_isj")
     with col2:
         os_val = st.text_input("Cod OS", value="01", key="fise_os")
+    with col3:
+        varsta_offset = st.number_input(
+            "Vârstă adăugată (ani)", min_value=0, value=0, step=1, key="fise_varsta",
+            help="Se adaugă la vârsta actuală (TA) și la vârsta fiecărui element de "
+                 "arboret (VRT), util pentru fișe valabile la o dată ulterioară."
+        )
 
     ready2 = a_up2 is not None and s_up2 is not None and (use_default_tmpl or tmpl_up2 is not None)
     if st.button("Generează fișele de teren", type="primary", disabled=not ready2):
@@ -188,7 +194,7 @@ with tab_fise:
                 progress = st.progress(0.0)
                 docx_bytes, n_ua = fisa_lib.generate_fise(
                     a_up2.getvalue(), s_up2.getvalue(), template_bytes,
-                    isj=isj_val, os_code=os_val,
+                    isj=isj_val, os_code=os_val, varsta_offset=int(varsta_offset),
                     progress_cb=lambda p: progress.progress(p),
                 )
                 progress.empty()
@@ -202,14 +208,17 @@ with tab_fise:
             except Exception as e:
                 st.error(f"A apărut o eroare: {e}")
 
-    with st.expander("Câmpuri care nu pot fi completate automat"):
+    with st.expander("Note despre completarea automată"):
         st.write(
             "- **Redenumire UA**, **%SUPR**, **Cantitate lucrări executate**: nu există "
             "în A.xlsx/S.xlsx, rămân goale.\n"
+            "- **VOL, CRS, PEX** din tabelul de specii rămân goale intenționat — sunt "
+            "valori calculate ulterior, după măsurătorile din teren.\n"
+            "- **Vârstă adăugată**: dacă e mai mare de 0, se adaugă la TA (vârsta "
+            "actuală) și la VRT (vârsta fiecărui element), pentru fișe valabile la o "
+            "dată ulterioară fără să reconvertești DBF-ul.\n"
             "- **CAT FUNC FCT** (sub-coloanele 1/2/3): maparea exactă nu a fost încă "
-            "100% confirmată pentru cazul cu toate cele 3 sub-câmpuri completate.\n"
-            "- **CRS** (creștere) în tabelul de specii: poate arăta uneori doar cifra "
-            "zecimală, din cauza unei particularități de aliniere a casetelor."
+            "100% confirmată pentru cazul cu toate cele 3 sub-câmpuri completate."
         )
 
 st.divider()
