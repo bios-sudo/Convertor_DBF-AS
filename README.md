@@ -2,8 +2,8 @@
 
 Aplicație cu 3 funcții, într-o singură pagină:
 1. **DBF → A.xlsx + S.xlsx**
-2. **A.xlsx + S.xlsx → DBF** (structura standard BIOSILV e integrată — nu mai trebuie încărcat un șablon)
-3. **Fișe de teren** (formularul tipizat, completat automat, 2/pagină, verso necompletat, cu opțiune de a adăuga ani la vârstă)
+2. **A.xlsx + S.xlsx → DBF**
+3. **Fișe de teren** (formularul tipizat, completat automat, 2/pagină, verso necompletat)
 
 Fișiere incluse:
 - `app.py` — interfața (Streamlit)
@@ -49,17 +49,18 @@ Foloseste **Streamlit Community Cloud** (nu necesită cunoștințe tehnice, doar
 - Pentru corecturi la maparea câmpurilor, modifică `fisa_lib.py` (fața fișei) sau
   `biosilv_lib.py` (conversia DBF ⇄ Excel) — sunt fișiere Python simple, comentate în română.
 
+## Notă despre eroarea „Oh no." la generarea fișelor de teren
+
+Dacă apărea o eroare fără mesaj clar la generarea fișelor pentru multe UA-uri, cauza era
+o ineficiență la inserarea fiecărei fișe în document (devenea tot mai lentă pe măsură ce
+documentul creștea, riscând să depășească limita de timp/memorie a planului gratuit
+Streamlit Cloud). E reparată — inserarea acum se face direct, indiferent de câte UA-uri
+sunt în fișier.
+
 ## Ce nu poate face automat aplicația (necesită verificare manuală)
 
 - Coloanele `vexpr, vexra, vexcu, vexig, vextc` din S (volume exploatabile) — nu există
   în DBF-ul BIOSILV, apar goale.
-- **VOL, CRS, PEX** din tabelul de specii al fișei de teren rămân goale intenționat —
-  sunt valori calculate ulterior, după măsurătorile din teren.
 - **CAT FUNC FCT** (sub-coloanele 1/2/3) — maparea nu a fost încă 100% confirmată pentru
   cazul cu toate cele 3 sub-câmpuri completate.
-- Câteva câmpuri din fișa de teren (zona ALTITUDINE MAX / unele coduri din tabelul de
-  specii, la al 2-lea/3-lea element) pot avea ocazional o mică decalare de aliniere,
-  din cauza unei diferențe structurale între formularul-șablon propriu și tabelul
-  original generat de BIOSILV. Datele sunt corecte; doar poziția exactă în casetă poate
-  varia cu 1 caracter în cazuri rare — semnalează-mi exemple concrete și le pot corecta
-  punctual.
+- **CRS** (creștere) în tabelul de specii — poate arăta uneori doar cifra zecimală.

@@ -33,13 +33,21 @@ def raw_tcs(row):
 
 def set_tc_text(tc, text):
     """Inlocuieste continutul unui <w:tc> cu un singur paragraf/run continand 'text',
-    centrat si cu font 12pt (marimea folosita si de exportul original BIOSILV)."""
+    centrat si cu font 12pt (marimea folosita si de exportul original BIOSILV).
+    Sterge intotdeauna continutul anterior (unele casete din sablon au text
+    static rezidual, ex. 'Cod') - dar sare peste crearea pPr/jc cand textul
+    e gol, ca sa reduca oarecum consumul de memorie fara sa piarda corectitudinea."""
     p = tc.find(qn('w:p'))
     if p is None:
+        if not text:
+            return
         p = OxmlElement('w:p')
         tc.append(p)
-    for r in p.findall(qn('w:r')):
-        p.remove(r)
+    else:
+        for r in p.findall(qn('w:r')):
+            p.remove(r)
+    if not text:
+        return
     pPr = p.find(qn('w:pPr'))
     if pPr is None:
         pPr = OxmlElement('w:pPr')
@@ -49,21 +57,20 @@ def set_tc_text(tc, text):
         jc = OxmlElement('w:jc')
         pPr.append(jc)
     jc.set(qn('w:val'), 'center')
-    if text:
-        r = OxmlElement('w:r')
-        rPr = OxmlElement('w:rPr')
-        sz = OxmlElement('w:sz')
-        sz.set(qn('w:val'), '24')  # 24 half-points = 12pt
-        rPr.append(sz)
-        szCs = OxmlElement('w:szCs')
-        szCs.set(qn('w:val'), '24')
-        rPr.append(szCs)
-        r.append(rPr)
-        t = OxmlElement('w:t')
-        t.set(qn('xml:space'), 'preserve')
-        t.text = str(text)
-        r.append(t)
-        p.append(r)
+    r = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    sz = OxmlElement('w:sz')
+    sz.set(qn('w:val'), '24')  # 24 half-points = 12pt
+    rPr.append(sz)
+    szCs = OxmlElement('w:szCs')
+    szCs.set(qn('w:val'), '24')
+    rPr.append(szCs)
+    r.append(rPr)
+    t = OxmlElement('w:t')
+    t.set(qn('xml:space'), 'preserve')
+    t.text = str(text)
+    r.append(t)
+    p.append(r)
 
 
 def fill_row_pair(header_tcs, box_tcs, values):
@@ -380,9 +387,14 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
 
     def insert_before_sect(el):
         if sectPr is not None:
-            body.insert(list(body).index(sectPr), el)
+            sectPr.addprevious(el)  # O(1): insereaza direct inaintea sectPr, fara sa
+                                     # re-parcurga tot documentul (evita incetinirea
+                                     # progresiva / posibila epuizare de resurse la
+                                     # multe UA-uri)
         else:
             body.append(el)
+
+    import gc
 
     n = len(A)
     pair_count = (n + 1) // 2
@@ -395,6 +407,7 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
             fill_front_table(front_table, a, isj=isj, os=os_code, varsta_offset=varsta_offset)
             insert_before_sect(front)
             insert_before_sect(spacer_p())
+            del front, front_table
 
         insert_before_sect(page_break_p())
 
@@ -402,9 +415,13 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
             verso = copy.deepcopy(verso_template)
             insert_before_sect(verso)
             insert_before_sect(spacer_p())
+            del verso
 
         if pi < pair_count - 1:
             insert_before_sect(page_break_p())
+
+        if pi % 5 == 0:
+            gc.collect()  # elibereaza periodic memoria copiilor XML procesate
 
         if progress_cb:
             progress_cb((pi + 1) / pair_count)
