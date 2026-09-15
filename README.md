@@ -51,11 +51,10 @@ Foloseste **Streamlit Community Cloud** (nu necesită cunoștințe tehnice, doar
 
 ## Notă despre paginare
 
-Fișele nu mai sunt forțate câte 2/pagină cu rupturi fixe — toate fișele (fața) curg
-una după alta, lăsând Word să încapă câte 2 (sau 1, dacă o fișă e mai înaltă din cauza
-multor specii) pe fiecare pagină, fără pagini goale. Apoi urmează, după o singură
-ruptură de pagină, toate versourile, la fel, fără goluri. Rezultat: document gata de
-printare, fără pagini de scos manual.
+Fișele alternează strict **2 pe pagină (față), apoi o pagină nouă cu cele 2 verso-uri
+corespunzătoare**, apoi din nou 2 fețe pe pagină nouă, ș.a.m.d. — niciodată un al
+treilea UA nu începe la finalul unei pagini. Rezultat: un carnet de teren uniform,
+gata de tăiat fizic la dimensiunea unei fișe, fără pagini goale.
 
 ## Notă despre eroarea „Oh no." la generarea fișelor de teren
 

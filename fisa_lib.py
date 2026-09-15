@@ -373,8 +373,10 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
     # citim sablonul o singura data: extragem sirurile XML ale celor doua tabele
     # (fata + verso), fara sa pastram documentul mare "viu" in memorie ulterior
     master = docx.Document(io.BytesIO(template_bytes))
-    front_xml_bytes = etree.tostring(master.tables[0]._tbl)
-    verso_xml_bytes = etree.tostring(master.tables[2]._tbl)
+    front_tbl_el = master.tables[0]._tbl
+    verso_tbl_el = master.tables[2]._tbl
+    front_xml_bytes = etree.tostring(front_tbl_el)
+    verso_xml_bytes = etree.tostring(verso_tbl_el)
     del master
     gc.collect()
 
@@ -392,36 +394,39 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
     PAGE_BREAK_XML = b'<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
     SPACER_XML = b'<w:p/>'
 
+    # inaltimile de rand sunt acum FIXE (hRule="exact"), asa ca fiecare fisa
+    # (fata sau verso) are exact aceeasi inaltime, indiferent de continut -
+    # 2 fise incap garantat pe o pagina, fara supra-revarsare si fara pagini
+    # goale. Revenim deci la alternarea stricta: 2 fete -> pagina noua -> 2
+    # verso-uri (pt. exact acele 2 UA-uri) -> pagina noua -> urmatoarele 2 fete...
+    # - un carnet de teren uniform, gata de taiat la dimensiunea unei fise.
     n = len(A)
     parts = []  # bucati de XML (bytes) ale corpului documentului, unite la final
-    for i, a in enumerate(A):
-        front_el = parse_xml(front_xml_bytes)
-        front_table = docx.table.Table(front_el, None)
-        fill_front_table(front_table, a, isj=isj, os=os_code, varsta_offset=varsta_offset)
-        parts.append(etree.tostring(front_el))
-        parts.append(SPACER_XML)
-        del front_el, front_table
+    pair_count = (n + 1) // 2
+    for pi in range(pair_count):
+        pair = A[pi * 2: pi * 2 + 2]
 
-        if i % 10 == 0:
+        for a in pair:
+            front_el = parse_xml(front_xml_bytes)
+            front_table = docx.table.Table(front_el, None)
+            fill_front_table(front_table, a, isj=isj, os=os_code, varsta_offset=varsta_offset)
+            parts.append(etree.tostring(front_el))
+            parts.append(SPACER_XML)
+            del front_el, front_table
+
+        parts.append(PAGE_BREAK_XML)
+
+        for _ in pair:
+            parts.append(verso_xml_bytes)
+            parts.append(SPACER_XML)
+
+        if pi < pair_count - 1:
+            parts.append(PAGE_BREAK_XML)
+
+        if pi % 10 == 0:
             gc.collect()
         if progress_cb:
-            progress_cb((i + 1) / n * 0.85)
-
-    # o singura ruptura de pagina intre blocul de fise (fata) si blocul de verso-uri;
-    # in interiorul fiecarui bloc NU fortam rupturi intre fise - lasam Word sa
-    # asambleze cate incap natural pe fiecare pagina (de regula 2, uneori 1 daca o
-    # fisa e mai inalta din cauza multor specii). Fortarea unei rupturi fixe dupa
-    # fiecare pereche putea lasa pagini aproape goale cand 2 fise nu incapeau
-    # impreuna pe aceeasi pagina.
-    parts.append(PAGE_BREAK_XML)
-
-    for i in range(n):
-        parts.append(verso_xml_bytes)
-        parts.append(SPACER_XML)
-        if i % 20 == 0:
-            gc.collect()
-        if progress_cb:
-            progress_cb(0.85 + (i + 1) / n * 0.15)
+            progress_cb((pi + 1) / pair_count)
 
     body_content = b''.join(parts)
     del parts
