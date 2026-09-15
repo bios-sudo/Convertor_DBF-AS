@@ -185,8 +185,11 @@ def fill_front_table(tbl, a, isj='01', os='01', varsta_offset=0):
     ta_val = a.get('ta')
     ta_val = (ta_val or 0) + varsta_offset if ta_val not in (None, '') else ta_val
     b2 = raw_tcs(rows[6])
+    exp_str = sv(a.get('exp'))
+    if len(exp_str) == 1:
+        exp_str = ' ' + exp_str  # expozitie: o singura litera -> aliniata la dreapta
     values2 = [
-        sv(a.get('rlf')), sv(a.get('cnf')), sv(a.get('exp')),
+        sv(a.get('rlf')), sv(a.get('cnf')), exp_str,
         sv(a.get('inc')), '', '',
         sv(a.get('sol')), sv(a.get('erz')), sv(a.get('flr')),
         sv(a.get('ts')), sv(a.get('inv')), '',

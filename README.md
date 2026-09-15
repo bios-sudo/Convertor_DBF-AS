@@ -3,7 +3,7 @@
 Aplicație cu 3 funcții, într-o singură pagină:
 1. **DBF → A.xlsx + S.xlsx**
 2. **A.xlsx + S.xlsx → DBF** (structura standard BIOSILV e integrată — nu mai trebuie încărcat un șablon)
-3. **Fișe de teren** (formularul tipizat, completat automat, 2/pagină, verso necompletat, cu opțiune de a adăuga ani la vârstă)
+3. **Fișe de teren** (formularul tipizat, completat automat, alternare strictă 2/pagină + verso, cu opțiune de a adăuga ani la vârstă) — **pornind fie din A.xlsx + S.xlsx, fie direct dintr-un DBF**
 
 Fișiere incluse:
 - `app.py` — interfața (Streamlit)

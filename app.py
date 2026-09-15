@@ -155,13 +155,51 @@ with tab_as2dbf:
 with tab_fise:
     st.subheader("Generează fișele de teren (formular tipizat)")
     st.write(
-        "Completează automat **fața** formularului (fișa descriptivă) din A.xlsx + "
-        "S.xlsx, și atașează **versoul necompletat** (elemente taxatorice), gata de "
-        "dus pe teren. 2 fișe pe pagină, pentru economie de hârtie."
+        "Completează automat **fața** formularului (fișa descriptivă) și atașează "
+        "**versoul necompletat** (elemente taxatorice), gata de dus pe teren. "
+        "Fișele alternează strict 2/pagină (față), apoi o pagină cu cele 2 verso-uri "
+        "corespunzătoare — carnet uniform, gata de tăiat și printat."
     )
 
-    a_up2 = st.file_uploader("Fișier A.xlsx", type=["xlsx"], key="fise_a")
-    s_up2 = st.file_uploader("Fișier S.xlsx", type=["xlsx"], key="fise_s")
+    sursa = st.radio(
+        "Sursa datelor", ["A.xlsx + S.xlsx", "direct din DBF"],
+        horizontal=True, key="fise_sursa",
+    )
+
+    a_bytes_in = None
+    s_bytes_in = None
+
+    if sursa == "A.xlsx + S.xlsx":
+        a_up2 = st.file_uploader("Fișier A.xlsx", type=["xlsx"], key="fise_a")
+        s_up2 = st.file_uploader("Fișier S.xlsx", type=["xlsx"], key="fise_s")
+        if a_up2 is not None:
+            a_bytes_in = a_up2.getvalue()
+        if s_up2 is not None:
+            s_bytes_in = s_up2.getvalue()
+    else:
+        dbf_up2 = st.file_uploader("Fișier .DBF", type=["dbf", "DBF"], key="fise_dbf")
+        col_adm, col_up = st.columns(2)
+        with col_adm:
+            adm_val2 = st.number_input("Cod ADM", min_value=0, value=1, step=1, key="fise_dbf_adm")
+        with col_up:
+            up_val2 = st.number_input("Număr UP", min_value=0, value=1, step=1, key="fise_dbf_up")
+        if dbf_up2 is not None:
+            with st.spinner("Se convertește DBF-ul în A/S..."):
+                try:
+                    with tempfile.TemporaryDirectory() as tmp:
+                        dbf_path = os.path.join(tmp, "input.dbf")
+                        with open(dbf_path, "wb") as f:
+                            f.write(dbf_up2.getvalue())
+                        a_path = os.path.join(tmp, "A.xlsx")
+                        s_path = os.path.join(tmp, "S.xlsx")
+                        na, ns = bl.dbf_to_A_S(dbf_path, int(adm_val2), int(up_val2), a_path, s_path)
+                        with open(a_path, "rb") as f:
+                            a_bytes_in = f.read()
+                        with open(s_path, "rb") as f:
+                            s_bytes_in = f.read()
+                    st.caption(f"✓ DBF convertit: {na} UA-uri, {ns} elemente de arboret.")
+                except Exception as e:
+                    st.error(f"Eroare la citirea DBF-ului: {e}")
 
     use_default_tmpl = st.checkbox("Folosește formularul standard încărcat în aplicație", value=True)
     tmpl_up2 = None
@@ -180,7 +218,7 @@ with tab_fise:
                  "arboret (VRT), util pentru fișe valabile la o dată ulterioară."
         )
 
-    ready2 = a_up2 is not None and s_up2 is not None and (use_default_tmpl or tmpl_up2 is not None)
+    ready2 = a_bytes_in is not None and s_bytes_in is not None and (use_default_tmpl or tmpl_up2 is not None)
     if st.button("Generează fișele de teren", type="primary", disabled=not ready2):
         with st.spinner("Se generează documentul... (poate dura câteva zeci de secunde pentru multe UA-uri)"):
             try:
@@ -193,7 +231,7 @@ with tab_fise:
 
                 progress = st.progress(0.0)
                 docx_bytes, n_ua = fisa_lib.generate_fise(
-                    a_up2.getvalue(), s_up2.getvalue(), template_bytes,
+                    a_bytes_in, s_bytes_in, template_bytes,
                     isj=isj_val, os_code=os_val, varsta_offset=int(varsta_offset),
                     progress_cb=lambda p: progress.progress(p),
                 )
