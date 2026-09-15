@@ -350,7 +350,18 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
     la varsta actuala (TA) si la varsta fiecarui element de arboret (VRT), util
     pentru a genera fise valabile la o data ulterioara fara sa reconverstesti DBF-ul.
     Returneaza bytes-ii documentului .docx generat (fata completata + verso
-    necompletat, 2 fise/pagina)."""
+    necompletat, 2 fise/pagina).
+
+    NOTA IMPORTANTA (memorie): fiecare fisa e construita si serializata separat,
+    ca text (bytes), apoi obiectele XML sunt eliberate imediat - documentul NU e
+    tinut intreg ca un singur arbore XML urias in memorie in timpul generarii, ca
+    sa suporte fisiere cu multe UA-uri fara sa depaseasca limita de RAM (ex. pe
+    Streamlit Community Cloud, care ofera doar ~1GB)."""
+    import gc
+    import zipfile
+    from lxml import etree
+    from docx.oxml import parse_xml
+
     A = _load_xlsx_stream(io.BytesIO(a_bytes), bl.A_HEADER)
     S = _load_xlsx_stream(io.BytesIO(s_bytes), bl.S_HEADER)
 
@@ -363,69 +374,64 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
     for a in A:
         a['_species'] = s_by.get(key(a), [])
 
+    # citim sablonul o singura data: extragem sirurile XML ale celor doua tabele
+    # (fata + verso), fara sa pastram documentul mare "viu" in memorie ulterior
     master = docx.Document(io.BytesIO(template_bytes))
-    front_template = master.tables[0]._tbl
-    verso_template = master.tables[2]._tbl
-    body = master.element.body
+    front_xml_bytes = etree.tostring(master.tables[0]._tbl)
+    verso_xml_bytes = etree.tostring(master.tables[2]._tbl)
+    del master
+    gc.collect()
 
-    sectPr = body.find(qn('w:sectPr'))
-    for child in list(body):
-        if child is not sectPr:
-            body.remove(child)
+    # extragem direct din arhiva .docx originala structura document.xml (text),
+    # ca sa reconstruim la final fara sa trecem prin serializarea unui arbore urias
+    with zipfile.ZipFile(io.BytesIO(template_bytes)) as zin:
+        doc_xml = zin.read('word/document.xml').decode('utf-8')
+        other_files = {name: zin.read(name) for name in zin.namelist() if name != 'word/document.xml'}
 
-    def page_break_p():
-        p_break = OxmlElement('w:p')
-        r = OxmlElement('w:r')
-        br = OxmlElement('w:br')
-        br.set(qn('w:type'), 'page')
-        r.append(br)
-        p_break.append(r)
-        return p_break
+    body_open_end = doc_xml.index('<w:body>') + len('<w:body>')
+    sect_start = doc_xml.index('<w:sectPr')
+    head = doc_xml[:body_open_end]
+    tail = doc_xml[sect_start:]
 
-    def spacer_p():
-        return OxmlElement('w:p')
-
-    def insert_before_sect(el):
-        if sectPr is not None:
-            sectPr.addprevious(el)  # O(1): insereaza direct inaintea sectPr, fara sa
-                                     # re-parcurga tot documentul (evita incetinirea
-                                     # progresiva / posibila epuizare de resurse la
-                                     # multe UA-uri)
-        else:
-            body.append(el)
-
-    import gc
+    PAGE_BREAK_XML = b'<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+    SPACER_XML = b'<w:p/>'
 
     n = len(A)
-    pair_count = (n + 1) // 2
-    for pi in range(pair_count):
-        pair = A[pi * 2: pi * 2 + 2]
+    parts = []  # bucati de XML (bytes) ale corpului documentului, unite la final
+    for i, a in enumerate(A):
+        front_el = parse_xml(front_xml_bytes)
+        front_table = docx.table.Table(front_el, None)
+        fill_front_table(front_table, a, isj=isj, os=os_code, varsta_offset=varsta_offset)
+        parts.append(etree.tostring(front_el))
+        parts.append(SPACER_XML)
+        del front_el, front_table
 
-        for a in pair:
-            front = copy.deepcopy(front_template)
-            front_table = docx.table.Table(front, master)
-            fill_front_table(front_table, a, isj=isj, os=os_code, varsta_offset=varsta_offset)
-            insert_before_sect(front)
-            insert_before_sect(spacer_p())
-            del front, front_table
+        if i % 2 == 1 or i == n - 1:
+            parts.append(PAGE_BREAK_XML)
+            # cate un verso pentru fiecare fisa din perechea curenta (1 sau 2)
+            pair_size = 2 if (i % 2 == 1) else 1
+            for _ in range(pair_size):
+                parts.append(verso_xml_bytes)
+                parts.append(SPACER_XML)
+            if i < n - 1:
+                parts.append(PAGE_BREAK_XML)
 
-        insert_before_sect(page_break_p())
-
-        for _ in pair:
-            verso = copy.deepcopy(verso_template)
-            insert_before_sect(verso)
-            insert_before_sect(spacer_p())
-            del verso
-
-        if pi < pair_count - 1:
-            insert_before_sect(page_break_p())
-
-        if pi % 5 == 0:
-            gc.collect()  # elibereaza periodic memoria copiilor XML procesate
-
+        if i % 10 == 0:
+            gc.collect()
         if progress_cb:
-            progress_cb((pi + 1) / pair_count)
+            progress_cb((i + 1) / n)
+
+    body_content = b''.join(parts)
+    del parts
+    gc.collect()
+
+    full_doc_xml = head.encode('utf-8') + body_content + tail.encode('utf-8')
+    del body_content
 
     out = io.BytesIO()
-    master.save(out)
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for name, data in other_files.items():
+            zout.writestr(name, data)
+        zout.writestr('word/document.xml', full_doc_xml)
+
     return out.getvalue(), len(A)
