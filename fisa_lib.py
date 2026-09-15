@@ -113,11 +113,11 @@ def width_to_boxindex(box_tcs, target_width):
 
 
 def fmt_dec_boxes(v, nboxes, leading_space=True):
-    """Reproduce exact modul in care programul vechi afiseaza valorile zecimale:
-    ' ' + parte_intreaga + ',' + zecimala, apoi aliniat la dreapta pe 'nboxes'
-    casete - daca sirul e mai lung decat nr. de casete, ultimele caractere in
-    exces (de regula ',X') se comprima in ULTIMA caseta. Returneaza o lista de
-    'nboxes' siruri, cate unul per caseta."""
+    """SUPRAF, ALTITUDINE MIN(MED), CNS: virgula NU se scrie ca text - e deja
+    tiparita pe formular, ca eticheta fixa, chiar inaintea ultimei casete din
+    dreapta. Deci: ultima caseta = cifra zecimala; restul casetelor (de la
+    dreapta la stanga) = partea intreaga, aliniata la dreapta. Fara virgula
+    nicaieri in text."""
     if v in (None, ''):
         return [''] * nboxes
     try:
@@ -126,15 +126,11 @@ def fmt_dec_boxes(v, nboxes, leading_space=True):
         return list(str(v).rjust(nboxes))[:nboxes]
     s = f"{f:.1f}"
     intpart, dec = s.split('.')
-    prefix = ' ' if leading_space else ''
-    value_str = f"{prefix}{intpart},{dec}"
-    if len(value_str) <= nboxes:
-        padded = value_str.rjust(nboxes)
-        return list(padded)
-    overflow = len(value_str) - nboxes + 1
-    head = list(value_str[:nboxes - 1])
-    tail = value_str[nboxes - 1:]
-    return head + [tail]
+    intpart_boxes = nboxes - 1
+    intpart = intpart.rjust(intpart_boxes)
+    if len(intpart) > intpart_boxes:
+        intpart = intpart[-intpart_boxes:]  # trunchiem daca partea intreaga e prea lunga (foarte rar)
+    return list(intpart) + [dec[:1]]
 
 
 def fill_decimal_field(box_tcs, start_idx, nboxes, value, leading_space=True):
@@ -406,20 +402,26 @@ def generate_fise(a_bytes, s_bytes, template_bytes, isj='01', os_code='01', vars
         parts.append(SPACER_XML)
         del front_el, front_table
 
-        if i % 2 == 1 or i == n - 1:
-            parts.append(PAGE_BREAK_XML)
-            # cate un verso pentru fiecare fisa din perechea curenta (1 sau 2)
-            pair_size = 2 if (i % 2 == 1) else 1
-            for _ in range(pair_size):
-                parts.append(verso_xml_bytes)
-                parts.append(SPACER_XML)
-            if i < n - 1:
-                parts.append(PAGE_BREAK_XML)
-
         if i % 10 == 0:
             gc.collect()
         if progress_cb:
-            progress_cb((i + 1) / n)
+            progress_cb((i + 1) / n * 0.85)
+
+    # o singura ruptura de pagina intre blocul de fise (fata) si blocul de verso-uri;
+    # in interiorul fiecarui bloc NU fortam rupturi intre fise - lasam Word sa
+    # asambleze cate incap natural pe fiecare pagina (de regula 2, uneori 1 daca o
+    # fisa e mai inalta din cauza multor specii). Fortarea unei rupturi fixe dupa
+    # fiecare pereche putea lasa pagini aproape goale cand 2 fise nu incapeau
+    # impreuna pe aceeasi pagina.
+    parts.append(PAGE_BREAK_XML)
+
+    for i in range(n):
+        parts.append(verso_xml_bytes)
+        parts.append(SPACER_XML)
+        if i % 20 == 0:
+            gc.collect()
+        if progress_cb:
+            progress_cb(0.85 + (i + 1) / n * 0.15)
 
     body_content = b''.join(parts)
     del parts

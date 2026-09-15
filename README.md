@@ -49,6 +49,14 @@ Foloseste **Streamlit Community Cloud** (nu necesită cunoștințe tehnice, doar
 - Pentru corecturi la maparea câmpurilor, modifică `fisa_lib.py` (fața fișei) sau
   `biosilv_lib.py` (conversia DBF ⇄ Excel) — sunt fișiere Python simple, comentate în română.
 
+## Notă despre paginare
+
+Fișele nu mai sunt forțate câte 2/pagină cu rupturi fixe — toate fișele (fața) curg
+una după alta, lăsând Word să încapă câte 2 (sau 1, dacă o fișă e mai înaltă din cauza
+multor specii) pe fiecare pagină, fără pagini goale. Apoi urmează, după o singură
+ruptură de pagină, toate versourile, la fel, fără goluri. Rezultat: document gata de
+printare, fără pagini de scos manual.
+
 ## Notă despre eroarea „Oh no." la generarea fișelor de teren
 
 Dacă apărea o eroare fără mesaj clar la generarea fișelor pentru multe UA-uri, cauza
@@ -70,9 +78,3 @@ diferență de conținut față de varianta anterioară.
   sunt valori calculate ulterior, după măsurătorile din teren.
 - **CAT FUNC FCT** (sub-coloanele 1/2/3) — maparea nu a fost încă 100% confirmată pentru
   cazul cu toate cele 3 sub-câmpuri completate.
-- Câteva câmpuri din fișa de teren (zona ALTITUDINE MAX / unele coduri din tabelul de
-  specii, la al 2-lea/3-lea element) pot avea ocazional o mică decalare de aliniere,
-  din cauza unei diferențe structurale între formularul-șablon propriu și tabelul
-  original generat de BIOSILV. Datele sunt corecte; doar poziția exactă în casetă poate
-  varia cu 1 caracter în cazuri rare — semnalează-mi exemple concrete și le pot corecta
-  punctual.
